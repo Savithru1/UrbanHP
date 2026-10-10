@@ -20,6 +20,7 @@ class NewMemoryPayload(BaseModel):
     recommended_protocol: str
     recurrence_risk: str = "high"
 
+@router.get("")
 @router.get("/")
 async def list_memories(category: Optional[str] = None):
     db = get_database()

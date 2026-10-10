@@ -3,6 +3,7 @@ from app.core.database import get_database
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
+@router.get("/summary")
 @router.get("/overview")
 async def get_system_overview():
     db = get_database()

@@ -16,6 +16,7 @@ from app.models.incident import IncidentVerifyUpdate, IncidentCreateText
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
+@router.get("")
 @router.get("/")
 async def list_incidents(limit: int = 50, category: Optional[str] = None):
     db = get_database()
