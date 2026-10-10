@@ -1,14 +1,25 @@
+# Web API
 fastapi>=0.115.0
 uvicorn[standard]>=0.31.0
-pymongo>=4.9.0
-motor>=3.6.0
+python-multipart>=0.0.12
 pydantic>=2.9.0
 pydantic-settings>=2.5.0
-python-multipart>=0.0.12
+python-dotenv>=1.0.1
+
+# MongoDB
+pymongo>=4.9.0
+motor>=3.6.0
+
+# Vision + text models
+# For an NVIDIA GPU install torch first from the CUDA index, e.g.:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+torch>=2.6.0
+torchvision>=0.21.0
+transformers>=4.50.0
+sentence-transformers>=3.0.0
 pillow>=10.4.0
 numpy>=1.26.0
-python-dotenv>=1.0.1
-requests>=2.32.0
-httpx>=0.27.0
-aiofiles>=24.1.0
-opencv-python-headless>=4.10.0.84
+opencv-python>=4.10.0.84
+
+# Fine-tuned pothole model (training/ and inference). Licensed AGPL-3.0.
+ultralytics>=8.3.0

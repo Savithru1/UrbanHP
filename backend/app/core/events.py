@@ -1,42 +1,29 @@
 import asyncio
-from typing import Set, Dict, Any
-from starlette.websockets import WebSocket
+from typing import Any, Dict, Set
+
 
 class EventBroadcaster:
+    """Fans out live analysis events to every browser listening on the SSE stream."""
+
     def __init__(self):
-        self.active_connections: Set[WebSocket] = set()
-        self.sse_subscribers: Set[asyncio.Queue] = set()
+        self.subscribers: Set[asyncio.Queue] = set()
 
-    async def connect_ws(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.add(websocket)
-
-    def disconnect_ws(self, websocket: WebSocket):
-        self.active_connections.discard(websocket)
-
-    def subscribe_sse(self) -> asyncio.Queue:
-        q = asyncio.Queue()
-        self.sse_subscribers.add(q)
+    def subscribe(self) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue(maxsize=500)
+        self.subscribers.add(q)
         return q
 
-    def unsubscribe_sse(self, q: asyncio.Queue):
-        self.sse_subscribers.discard(q)
+    def unsubscribe(self, q: asyncio.Queue):
+        self.subscribers.discard(q)
 
     async def broadcast(self, event_type: str, data: Dict[str, Any]):
         message = {"event": event_type, "data": data}
-        
-        # Broadcast to WebSockets
-        for ws in list(self.active_connections):
+        for q in list(self.subscribers):
             try:
-                await ws.send_json(message)
-            except Exception:
-                self.disconnect_ws(ws)
-                
-        # Broadcast to SSE queues
-        for q in list(self.sse_subscribers):
-            try:
-                await q.put(message)
-            except Exception:
-                self.unsubscribe_sse(q)
+                q.put_nowait(message)
+            except asyncio.QueueFull:
+                # A stalled client must never block the analysis pipeline.
+                self.unsubscribe(q)
+
 
 broadcaster = EventBroadcaster()

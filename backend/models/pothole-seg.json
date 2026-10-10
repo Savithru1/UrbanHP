@@ -1,0 +1,39 @@
+{
+  "base_model": "yolo11s-seg.pt",
+  "dataset": "manot/pothole-segmentation (Roboflow 'road damage' v3, CC BY 4.0)",
+  "train_images": 582,
+  "validation_images": 157,
+  "test_images": 80,
+  "test": {
+    "box_precision": 0.876,
+    "box_recall": 0.799,
+    "box_mAP50": 0.876,
+    "box_mAP50_95": 0.638,
+    "mask_precision": 0.871,
+    "mask_recall": 0.794,
+    "mask_mAP50": 0.868,
+    "mask_mAP50_95": 0.556
+  },
+  "full_pipeline_on_test_photos": {
+    "zero_shot_only": {
+      "precision": 0.818,
+      "recall": 0.132,
+      "f1": 0.228,
+      "correct": 27,
+      "false_alarms": 6,
+      "missed": 177,
+      "photos_with_a_pothole_flagged": "52/78",
+      "seconds_per_photo": 0.6
+    },
+    "with_fine_tuned_model": {
+      "precision": 0.777,
+      "recall": 0.77,
+      "f1": 0.773,
+      "correct": 157,
+      "false_alarms": 45,
+      "missed": 47,
+      "photos_with_a_pothole_flagged": "66/78",
+      "seconds_per_photo": 0.38
+    }
+  }
+}

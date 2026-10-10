@@ -1,194 +1,121 @@
-import os
-import uuid
 import shutil
+import uuid
+from collections import Counter
 from pathlib import Path
-from typing import List, Optional
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
-from pydantic import BaseModel
+from typing import Optional
 
-from app.core.database import get_database
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
+from app.core import store
 from app.core.config import settings
+from app.core.database import get_database
 from app.core.events import broadcaster
-from app.services.ingestion_service import IngestionService
-from app.services.vector_search_service import VectorSearchService
-from app.services.recommendation_service import RecommendationService
-from app.models.incident import IncidentVerifyUpdate, IncidentCreateText
+from app.services import pipeline
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
+
+@router.post("")
+async def submit_report(
+    file: Optional[UploadFile] = File(None),
+    text: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+):
+    """
+    Submit a report: an image or video, a written description, or both.
+    Returns the new incident straight away; analysis continues in the background
+    and is pushed live over /api/stream/events.
+    """
+    has_file = file is not None and bool(file.filename)
+    if not has_file and not (text and text.strip()):
+        raise HTTPException(status_code=400, detail="Attach an image or video, or describe the problem.")
+
+    file_path = file_url = kind = None
+    if has_file:
+        kind = pipeline.kind_of(file.filename, file.content_type or "")
+        if kind is None:
+            raise HTTPException(status_code=400, detail="Unsupported file. Upload an image (jpg, png, webp) or a video (mp4, mov, webm).")
+        stored_name = f"{kind}_{uuid.uuid4().hex[:10]}{Path(file.filename).suffix.lower()}"
+        file_path = settings.MEDIA_PATH / stored_name
+        with open(file_path, "wb") as out:
+            shutil.copyfileobj(file.file, out)
+        file_url = f"/uploads/media/{stored_name}"
+
+    return await pipeline.create_incident(
+        file_path=file_path, file_name=file.filename if has_file else None, kind=kind,
+        file_url=file_url, text=text, location=location,
+    )
+
+
 @router.get("")
-@router.get("/")
-async def list_incidents(limit: int = 50, category: Optional[str] = None):
+async def list_incidents(limit: int = 30):
+    """Recent reports, newest first (the seeded demo history is left out)."""
     db = get_database()
-    query = {}
-    if category and category != "all":
-        query["incident_type"] = category
-    cursor = db.incidents.find(query).sort("created_at", -1).limit(limit)
-    incidents = await cursor.to_list(length=limit)
+    incidents = await db.incidents.find({"is_seed": {"$ne": True}}).sort("created_at", -1).limit(limit).to_list(length=limit)
+    media_ids = [i["links"]["media_id"] for i in incidents if i["links"].get("media_id")]
+    media = {m["_id"]: m async for m in db.media_assets.find({"_id": {"$in": media_ids}})}
+    for i in incidents:
+        i["media"] = media.get(i["links"].get("media_id"))
     return incidents
+
 
 @router.get("/{incident_id}")
 async def get_incident(incident_id: str):
+    """One incident with everything it links to, and the history of how it was written to the database."""
     db = get_database()
     incident = await db.incidents.find_one({"_id": incident_id})
     if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found in MongoDB")
-    return incident
+        raise HTTPException(status_code=404, detail="Incident not found")
+    links = incident["links"]
+    detections = await db.detections.find({"links.incident_id": incident_id}).sort([("severity", -1), ("confidence", -1)]).to_list(length=500)
+    media = await db.media_assets.find_one({"_id": links["media_id"]}) if links.get("media_id") else None
+    memories = await db.memories.find({"_id": {"$in": links.get("memory_ids", [])}}).to_list(length=10)
+    related = await db.incidents.find(
+        {"_id": {"$in": links.get("related_incident_ids", [])}},
+        {"title": 1, "location": 1, "created_at": 1, "severity": 1},
+    ).sort("created_at", -1).to_list(length=10)
+    updates = await db.activity_log.find({"links.incident_id": incident_id}).sort("at", 1).to_list(length=500)
+    return {"incident": incident, "detections": detections, "media": media, "memories": memories, "related": related, "updates": updates}
 
-@router.post("/text")
-async def create_text_incident(payload: IncidentCreateText):
-    if not payload.text.strip():
-        raise HTTPException(status_code=400, detail="Text complaint cannot be empty")
-    doc = await IngestionService.process_text_input(payload.text, location=payload.location or "Ward 4, Sector 7")
-    return doc
-
-@router.post("/upload")
-async def upload_media_incident(
-    file: UploadFile = File(...),
-    input_type: str = Form(...), # image, video, voice
-    location: str = Form("Ward 4, Sector 7")
-):
-    if input_type not in ["image", "video", "voice"]:
-        raise HTTPException(status_code=400, detail="Invalid input_type. Allowed: image, video, voice")
-    
-    ext = Path(file.filename or "").suffix.lower()
-    if not ext:
-        if input_type == "image":
-            ext = ".jpg"
-        elif input_type == "video":
-            ext = ".mp4"
-        elif input_type == "voice":
-            ext = ".wav"
-            
-    unique_filename = f"{input_type}_{uuid.uuid4().hex[:8]}{ext}"
-    dest_path = settings.MEDIA_PATH / unique_filename
-    
-    with open(dest_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    file_url = f"/uploads/media/{unique_filename}"
-    
-    doc = await IngestionService.process_media_upload(
-        input_type=input_type,
-        file_path=dest_path,
-        file_url=file_url,
-        original_filename=file.filename or unique_filename,
-        location=location
-    )
-    return doc
-
-@router.post("/{incident_id}/re-evaluate")
-async def re_evaluate_incident(incident_id: str):
-    """
-    ACT 5 OF HACKATHON DEMO:
-    Re-evaluates an incident against the latest City Memory.
-    If a memory was updated in MongoDB Compass, this will fetch the updated
-    protocol and generate an updated recommendation with full transparent reasoning!
-    """
-    db = get_database()
-    incident = await db.incidents.find_one({"_id": incident_id})
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found in MongoDB")
-        
-    old_recommendation = incident.get("recommendation")
-    category = incident.get("incident_type", "pothole")
-    severity = incident.get("severity", "medium")
-    extracted_text = incident.get("extracted_text") or incident.get("raw_content") or ""
-    evidence_summary = incident.get("evidence_summary", {})
-    
-    # Re-query memories via Vector Search
-    matched_memories = await VectorSearchService.search_memories(extracted_text, incident_type=category, top_k=2)
-    memory_ids = [m["_id"] for m in matched_memories]
-    
-    new_recommendation, new_reasoning = RecommendationService.generate_recommendation(
-        incident_type=category,
-        extracted_text=extracted_text,
-        severity=severity,
-        evidence_summary=evidence_summary,
-        matched_memories=matched_memories
-    )
-    
-    stages = incident.get("processing_stages", [])
-    stages.append({
-        "stage": "re-evaluated",
-        "timestamp": datetime.utcnow().isoformat() if hasattr(datetime, 'utcnow') else "",
-        "detail": f"Re-evaluated against updated memory ({len(matched_memories)} retrieved)"
-    })
-    
-    new_version = incident.get("version", 1) + 1
-    
-    # Record evaluation audit
-    eval_id = f"eval_{uuid.uuid4().hex[:8]}"
-    eval_record = {
-        "_id": eval_id,
-        "incident_id": incident_id,
-        "memory_ids_used": memory_ids,
-        "previous_recommendation": old_recommendation,
-        "new_recommendation": new_recommendation,
-        "reasoning_trace": new_reasoning,
-        "changed_due_to_memory_update": (old_recommendation != new_recommendation),
-        "created_at": datetime.utcnow()
-    }
-    await db.evaluations.insert_one(eval_record)
-    
-    # Update incident in MongoDB
-    await db.incidents.update_one(
-        {"_id": incident_id},
-        {"$set": {
-            "related_memory_ids": memory_ids,
-            "recommendation": new_recommendation,
-            "reasoning_trace": new_reasoning,
-            "version": new_version,
-            "processing_stages": stages,
-            "updated_at": datetime.utcnow()
-        }}
-    )
-    
-    updated = await db.incidents.find_one({"_id": incident_id})
-    await broadcaster.broadcast("incident_update", updated)
-    return {
-        "status": "success",
-        "incident": updated,
-        "evaluation": eval_record
-    }
-
-from datetime import datetime
-
-@router.patch("/{incident_id}/verify")
-async def verify_incident(incident_id: str, payload: IncidentVerifyUpdate):
-    db = get_database()
-    incident = await db.incidents.find_one({"_id": incident_id})
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found in MongoDB")
-        
-    update_data = {
-        "verification_status": payload.verification_status,
-        "updated_at": datetime.utcnow(),
-        "version": incident.get("version", 1) + 1
-    }
-    if payload.corrected_category:
-        update_data["incident_type"] = payload.corrected_category
-    if payload.corrected_severity:
-        update_data["severity"] = payload.corrected_severity
-        
-    stages = incident.get("processing_stages", [])
-    stages.append({
-        "stage": "verified" if payload.verification_status == "verified" else "corrected",
-        "timestamp": datetime.utcnow().isoformat(),
-        "detail": f"Inspector verified status as: {payload.verification_status}"
-    })
-    update_data["processing_stages"] = stages
-    
-    await db.incidents.update_one({"_id": incident_id}, {"$set": update_data})
-    updated = await db.incidents.find_one({"_id": incident_id})
-    await broadcaster.broadcast("incident_update", updated)
-    return updated
 
 @router.delete("/{incident_id}")
 async def delete_incident(incident_id: str):
+    """Deletes an incident with its detections, file and stored images, and unlinks it everywhere else."""
     db = get_database()
-    res = await db.incidents.delete_one({"_id": incident_id})
-    if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Incident not found in MongoDB")
-    await broadcaster.broadcast("incident_deleted", {"_id": incident_id})
+    incident = await db.incidents.find_one({"_id": incident_id})
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    links = incident["links"]
+
+    detections = await db.detections.find({"links.incident_id": incident_id}, {"links": 1, "label": 1}).to_list(length=1000)
+    files = [settings.SNAPSHOT_PATH / f"{incident_id}_poster.jpg"] + [settings.SNAPSHOT_PATH / f"{d['_id']}.jpg" for d in detections]
+    async for m in db.media_assets.find({"links.incident_id": incident_id}):
+        files.append(Path(m["storage_path"]))
+        await store.delete("media_assets", m["_id"], summary=f"File removed: {m['file_name']}", incident_id=incident_id)
+    for f in files:
+        f.unlink(missing_ok=True)
+
+    for d in detections:
+        await store.delete("detections", d["_id"], summary=f"Detection removed: {d['label']}", incident_id=incident_id)
+
+    # Undo what this incident added to the other collections.
+    for issue_type_id, n in Counter(d["links"]["issue_type_id"] for d in detections).items():
+        await store.update("issue_types", issue_type_id, incident_id=incident_id,
+                           summary=f"Counters lowered: incident {incident_id} was deleted",
+                           inc={"stats.incidents": -1, "stats.detections": -n})
+    for memory_id in links.get("memory_ids", []):
+        await store.update("memories", memory_id, incident_id=incident_id,
+                           summary=f"Unlinked from deleted incident {incident_id}",
+                           pull={"links.used_by_incident_ids": incident_id}, inc={"times_used": -1})
+    async for other in db.incidents.find({"links.related_incident_ids": incident_id}, {"_id": 1}):
+        left = await store.update("incidents", other["_id"], incident_id=incident_id,
+                                  summary=f"Unlinked from deleted incident {incident_id}",
+                                  pull={"links.related_incident_ids": incident_id})
+        if not left["links"]["related_incident_ids"] and left.get("is_recurring"):
+            await store.update("incidents", other["_id"], incident_id=incident_id,
+                               summary="No earlier reports remain: no longer marked as recurring", set={"is_recurring": False})
+    await db.incidents.update_many({"links.duplicate_of": incident_id}, {"$set": {"links.duplicate_of": None}})
+
+    await store.delete("incidents", incident_id, summary=f"Report deleted: {incident.get('title') or incident_id}", incident_id=incident_id)
+    await broadcaster.broadcast("deleted", {"incident_id": incident_id})
     return {"status": "deleted", "incident_id": incident_id}

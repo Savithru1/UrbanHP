@@ -1,108 +1,147 @@
 @import "tailwindcss";
-@import "@xyflow/react/dist/style.css";
 
-:root {
-  --bg-primary: #07080c;
-  --bg-secondary: #0d0f17;
-  --bg-card: #121522;
-  --bg-elevated: #181c2d;
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-focus: rgba(56, 189, 248, 0.35);
-  --accent-cyan: #38bdf8;
-  --accent-amber: #f59e0b;
-  --accent-emerald: #10b981;
-  --accent-rose: #f43f5e;
+@theme {
+  --color-ink: #0b0c0e;
+  --color-panel: #131518;
+  --color-line: #24272c;
+  --color-muted: #8b9098;
+  --color-detect: #ff6a3d;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: var(--bg-primary);
-  color: #e2e8f0;
-  overflow-x: hidden;
+  font-family: var(--font-sans);
+  background: var(--color-ink);
+  color: #e6e8eb;
 }
 
-h1, h2, h3, h4, .font-heading {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  letter-spacing: -0.02em;
+/* ---- Detection viewer -------------------------------------------------- */
+
+.viewer {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+  background: #000;
 }
 
-code, pre, .font-mono {
-  font-family: 'Geist Mono', monospace;
+.viewer > img,
+.viewer > video {
+  display: block;
+  max-width: 100%;
+  max-height: 72vh;
 }
 
-/* Custom minimal scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Once the picture's proportions are known it fills the available width (small photos are scaled up). */
+.viewer.is-sized {
+  display: block;
+  margin-inline: auto;
 }
 
-::-webkit-scrollbar-track {
-  background: #090a0f;
+.viewer.is-sized > img,
+.viewer.is-sized > video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #1e2436;
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #2b334c;
-}
-
-/* Glassmorphism & borders */
-.panel-glass {
-  background: rgba(13, 15, 23, 0.78);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.panel-subtle {
-  background: #0d0f17;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.glow-cyan {
-  box-shadow: 0 0 25px -5px rgba(56, 189, 248, 0.15);
-}
-
-.glow-amber {
-  box-shadow: 0 0 25px -5px rgba(245, 158, 11, 0.15);
-}
-
-/* Subtle architectural grid pattern */
-.bg-grid-subtle {
-  background-size: 32px 32px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-}
-
-/* React Flow dark overrides */
-.react-flow__pane {
-  background: #07080c !important;
-}
-
-.react-flow__edge-path {
-  stroke: #334155 !important;
-  stroke-width: 2 !important;
-}
-
-.react-flow__controls {
-  box-shadow: none !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  background: #0d0f17 !important;
-  border-radius: 8px !important;
+.viewer-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   overflow: hidden;
+  line-height: 1.2;
+  text-align: left;
+  font-family: var(--font-mono);
+  /* Lets the labels and HUD scale with the size of the picture (cqw units below). */
+  container-type: inline-size;
 }
 
-.react-flow__controls-button {
-  background: #0d0f17 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07) !important;
-  fill: #94a3b8 !important;
+.viewer-overlay svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
-.react-flow__controls-button:hover {
-  background: #181c2d !important;
-  fill: #38bdf8 !important;
+/* Line widths stay in screen pixels although the drawing is stretched over the picture. */
+.viewer-overlay svg * {
+  vector-effect: non-scaling-stroke;
+}
+
+/* A detection label: a solid tab in the box colour sitting on the box's top-left corner. */
+.det-label {
+  position: absolute;
+  transform: translateY(-100%);
+  padding: 0.15em 0.45em;
+  white-space: nowrap;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: clamp(11px, 2.3cqw, 20px);
+  font-weight: 500;
+}
+
+/* At the top edge there is no room above the box: put the label inside it. */
+.det-label.is-inside {
+  transform: none;
+}
+
+.det-severity {
+  margin-left: 0.6em;
+  padding-left: 0.6em;
+  border-left: 1px solid rgb(255 255 255 / 0.55);
+  font-size: 0.85em;
+}
+
+.hud {
+  position: absolute;
+  font-size: clamp(8px, 1.35cqw, 13px);
+  top: 2.2%;
+  left: 1.6%;
+  padding: 0.9em 1.1em;
+  background: rgb(11 12 14 / 0.66);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  backdrop-filter: blur(3px);
+  color: #c9cdd3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hud-title {
+  color: var(--color-detect);
+  margin-bottom: 0.8em;
+}
+
+.hud dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.35em 1.2em;
+}
+
+.hud dt {
+  color: #8b9098;
+}
+
+.hud .accent {
+  color: var(--color-detect);
+}
+
+/* Sweep shown while a still image is being analysed. */
+.scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22%;
+  background: linear-gradient(to bottom, transparent, rgb(255 106 61 / 0.22) 85%, rgb(255 106 61 / 0.9));
+  animation: scan 1.6s linear infinite;
+}
+
+@keyframes scan {
+  from { top: -22%; }
+  to { top: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanline { animation: none; top: 0; height: 100%; opacity: 0.3; }
 }
