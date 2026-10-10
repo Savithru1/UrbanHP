@@ -12,7 +12,8 @@ venv/
 
 # Scratch & references
 scratch/
-uploads/media/
+uploads/
+backend/uploads/
 
 # IDE & OS
 .DS_Store

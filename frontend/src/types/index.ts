@@ -32,6 +32,29 @@ export interface ProcessingStage {
   detail?: string;
 }
 
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+  confidence: number;
+  severity?: string;
+}
+
+export interface MatchedIncident {
+  matched: boolean;
+  incident_id?: string;
+  title?: string;
+  previous_date?: string;
+  previous_action?: string;
+  previous_outcome?: string;
+  recurrence_count?: number;
+  match_confidence?: number;
+  status: string;
+  message?: string;
+}
+
 export interface Incident {
   _id: string;
   input_type: InputType;
@@ -45,11 +68,14 @@ export interface Incident {
   confidence_score: number;
   original_file_id?: string;
   file_url?: string;
+  bounding_box?: BoundingBox;
+  matched_incident?: MatchedIncident;
   evidence_summary: Record<string, any>;
   related_memory_ids: string[];
   recommendation?: string;
   reasoning_trace?: string;
   version: number;
+  before_snapshot?: Record<string, any>;
   processing_stages: ProcessingStage[];
   created_at: string;
   updated_at: string;

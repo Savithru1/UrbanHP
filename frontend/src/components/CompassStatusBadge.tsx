@@ -63,13 +63,23 @@ export const CompassStatusBadge: React.FC<Props> = ({ isConnected, totalDocs = 1
               <div className="p-3 rounded-xl bg-[#07090e] border border-white/5 font-mono">
                 <div className="flex items-center justify-between text-slate-400 mb-1 text-[11px]">
                   <span>Compass Connection String:</span>
-                  <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
-                  >
-                    {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    <span>{copied ? 'Copied' : 'Copy URI'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={uri}
+                      className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                      title="Launch MongoDB Compass desktop application"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Open Compass</span>
+                    </a>
+                    <button
+                      onClick={handleCopy}
+                      className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                    >
+                      {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copied ? 'Copied' : 'Copy URI'}</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="text-cyan-300 font-bold select-all">{uri}</div>
               </div>

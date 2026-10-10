@@ -1,15 +1,15 @@
 import React from 'react';
 import { 
-  LayoutDashboard, 
-  UploadCloud, 
+  Sparkles,
   Microscope, 
+  LayoutDashboard, 
   GitFork, 
   BrainCircuit, 
   Radio
 } from 'lucide-react';
 import { CompassStatusBadge } from './CompassStatusBadge';
 
-export type NavScreen = 'dashboard' | 'ingestion' | 'evidence-lab' | 'universe' | 'impact-lab';
+export type NavScreen = 'presentation' | 'evidence-lab' | 'dashboard' | 'universe' | 'impact-lab';
 
 interface Props {
   currentScreen: NavScreen;
@@ -19,10 +19,10 @@ interface Props {
 
 export const Navigation: React.FC<Props> = ({ currentScreen, onSelectScreen, isStreamConnected }) => {
   const navItems = [
+    { id: 'presentation', label: '5-Min Presentation Studio', icon: Sparkles, badge: 'Main Flow' },
+    { id: 'evidence-lab', label: '3-Panel Evidence Lab', icon: Microscope, badge: 'Forensic' },
     { id: 'dashboard', label: 'Command Center', icon: LayoutDashboard, badge: null },
-    { id: 'ingestion', label: 'Evidence Ingestion', icon: UploadCloud, badge: '4 Inputs' },
-    { id: 'evidence-lab', label: 'Evidence Lab', icon: Microscope, badge: '3 Panels' },
-    { id: 'universe', label: 'Memory Universe', icon: GitFork, badge: 'xyflow' },
+    { id: 'universe', label: 'City Memory Universe', icon: GitFork, badge: 'xyflow' },
     { id: 'impact-lab', label: 'Memory Impact Lab', icon: BrainCircuit, badge: 'Act 4 & 5' },
   ] as const;
 
@@ -56,7 +56,7 @@ export const Navigation: React.FC<Props> = ({ currentScreen, onSelectScreen, isS
                   onClick={() => onSelectScreen(item.id)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-[#181c2d] text-white shadow-sm border border-cyan-500/30 text-cyan-300'
+                      ? 'bg-[#181c2d] text-white shadow-sm border border-cyan-500/30 text-cyan-300 font-bold'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
                   }`}
                 >

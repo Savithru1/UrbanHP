@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { StreamProvider, useStream } from './context/StreamContext';
 import { Navigation } from './components/Navigation';
 import type { NavScreen } from './components/Navigation';
+import { PresentationConsole } from './components/Presentation/PresentationConsole';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { IncidentsFeed } from './components/Dashboard/IncidentsFeed';
-import { IngestionHub } from './components/Ingestion/IngestionHub';
 import { EvidenceLab } from './components/EvidenceLab/EvidenceLab';
 import { MemoryUniverseFlow } from './components/MemoryUniverse/MemoryUniverseFlow';
 import { MemoryImpactLab } from './components/MemoryImpact/MemoryImpactLab';
@@ -13,7 +13,7 @@ import type { Incident, SystemStats } from './types';
 import { Database, GitBranch } from 'lucide-react';
 
 function AppContent() {
-  const [currentScreen, setCurrentScreen] = useState<NavScreen>('evidence-lab');
+  const [currentScreen, setCurrentScreen] = useState<NavScreen>('presentation');
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -40,12 +40,6 @@ function AppContent() {
     loadData();
   }, [refreshCount]);
 
-  const handleIncidentCreated = (incident: Incident) => {
-    setIncidents((prev) => [incident, ...prev]);
-    setSelectedIncidentId(incident._id);
-    setCurrentScreen('evidence-lab');
-  };
-
   const handleOpenLab = (id: string) => {
     setSelectedIncidentId(id);
     setCurrentScreen('evidence-lab');
@@ -62,6 +56,17 @@ function AppContent() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {currentScreen === 'presentation' && (
+          <PresentationConsole />
+        )}
+
+        {currentScreen === 'evidence-lab' && (
+          <EvidenceLab
+            selectedIncidentId={selectedIncidentId}
+            onSelectIncidentId={setSelectedIncidentId}
+          />
+        )}
+
         {currentScreen === 'dashboard' && (
           <div className="space-y-6 animate-in fade-in duration-200">
             <MetricCards stats={stats} />
@@ -71,17 +76,6 @@ function AppContent() {
               onOpenLab={handleOpenLab}
             />
           </div>
-        )}
-
-        {currentScreen === 'ingestion' && (
-          <IngestionHub onIncidentCreated={handleIncidentCreated} />
-        )}
-
-        {currentScreen === 'evidence-lab' && (
-          <EvidenceLab
-            selectedIncidentId={selectedIncidentId}
-            onSelectIncidentId={setSelectedIncidentId}
-          />
         )}
 
         {currentScreen === 'universe' && (

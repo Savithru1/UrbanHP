@@ -57,16 +57,21 @@ class IncidentModel(BaseModel):
     original_file_id: Optional[str] = None
     file_url: Optional[str] = None
     
-    # Forensic evidence breakdown
+    # Forensic evidence breakdown & visual highlight bounding box
+    bounding_box: Optional[Dict[str, Any]] = None
     evidence_summary: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Recurrence & Historical Match result
+    matched_incident: Optional[Dict[str, Any]] = None
     
     # City memory linkages
     related_memory_ids: List[str] = Field(default_factory=list)
     recommendation: Optional[str] = None
     reasoning_trace: Optional[str] = None
     
-    # Progression tracking
+    # Progression tracking & Before/After snapshot
     version: int = 1
+    before_snapshot: Optional[Dict[str, Any]] = None
     processing_stages: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
