@@ -6,7 +6,7 @@ the text analyser (keywords), and is mirrored into the `issue_types` collection
 so every detection in MongoDB points at a documented meaning.
 """
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,13 @@ class IssueType:
     max_area: float = 0.70
     # Shifts the size-based severity: 0 = cosmetic (-1), 1 = normal, 2 = dangerous (+1).
     hazard: int = 1
+    # The order given to the crew, completed with what was found: "Repair" + "3 potholes".
+    verb: str = "Deal with"
+    # The standard procedure, one step per entry, in the order the work is done.
+    # `default_action` above is the same procedure in one sentence.
+    steps: List[str] = field(default_factory=list)
+    # What the crew needs to have with them.
+    equipment: List[str] = field(default_factory=list)
 
 
 ISSUE_TYPES: List[IssueType] = [
@@ -52,6 +59,15 @@ ISSUE_TYPES: List[IssueType] = [
         max_area=0.60,
         hazard=1,
         lookalikes=["a closed manhole cover", "a shadow on a smooth road"],
+        verb="Repair",
+        steps=[
+            "Cone off the lane around the pothole.",
+            "Cut the edges square and remove loose material and water, down to a sound base.",
+            "Apply tack coat to the base and the cut edges.",
+            "Fill with hot-mix asphalt in layers, compacting each layer.",
+            "Finish level with the road surface and seal the edges.",
+        ],
+        equipment=["Hot-mix asphalt", "Tack coat", "Plate compactor", "Cones and signs"],
     ),
     IssueType(
         id="road_crack",
@@ -67,6 +83,14 @@ ISSUE_TYPES: List[IssueType] = [
         max_area=0.75,
         hazard=0,
         lookalikes=["a painted line on a smooth road"],
+        verb="Seal",
+        steps=[
+            "Clean the cracks of dust, vegetation and loose material.",
+            "Rout the wider cracks so the sealant has an edge to grip.",
+            "Fill with hot-applied sealant, finishing just below the road surface.",
+            "Where the cracking is interconnected (an alligator pattern), mark the area for resurfacing instead.",
+        ],
+        equipment=["Crack sealant and melter", "Router", "Compressed air or wire brush", "Cones and signs"],
     ),
     IssueType(
         id="fallen_tree",
@@ -82,6 +106,14 @@ ISSUE_TYPES: List[IssueType] = [
         max_area=0.90,
         hazard=2,
         lookalikes=["a healthy standing tree"],
+        verb="Clear",
+        steps=[
+            "Cordon off the road and divert traffic.",
+            "Check for power lines caught in the tree; if there are any, wait until the line is isolated.",
+            "Cut the tree into sections and clear the carriageway.",
+            "Remove the debris, then check the road surface and the neighbouring trees for damage.",
+        ],
+        equipment=["Chainsaw and protective gear", "Barricades and signs", "Truck or loader for the debris"],
     ),
     IssueType(
         id="road_obstruction",
@@ -97,6 +129,14 @@ ISSUE_TYPES: List[IssueType] = [
         examples=["Something is lying on the road and vehicles cannot pass.", "Construction material has been left in the middle of the street."],
         max_area=0.80,
         hazard=1,
+        verb="Clear",
+        steps=[
+            "Put out cones and warn approaching traffic.",
+            "Remove the obstruction from the carriageway.",
+            "Sweep the surface clear of small debris.",
+            "Inspect the surface underneath for damage, and note where the material came from.",
+        ],
+        equipment=["Cones and signs", "Loader or truck", "Brooms and shovels"],
     ),
     IssueType(
         id="broken_streetlight",
@@ -112,6 +152,14 @@ ISSUE_TYPES: List[IssueType] = [
         max_area=0.70,
         hazard=1,
         lookalikes=["a working street light", "an intact lamp post standing upright"],
+        verb="Repair",
+        steps=[
+            "Isolate the circuit at the feeder panel before touching the pole.",
+            "Inspect the pole, the wiring and the luminaire for damage.",
+            "Repair or replace the faulty part: lamp, driver, cable or pole.",
+            "Restore power and confirm after dark that the light works.",
+        ],
+        equipment=["Aerial lift or ladder", "Insulated tools and tester", "Spare luminaire and cable"],
     ),
     IssueType(
         id="fallen_wire",
@@ -127,6 +175,14 @@ ISSUE_TYPES: List[IssueType] = [
         max_area=0.80,
         hazard=2,
         lookalikes=["overhead power lines on upright poles"],
+        verb="Secure",
+        steps=[
+            "Treat the wire as live: keep people at least 10 metres away.",
+            "Have the supply to the line switched off.",
+            "Re-string or remove the cable, and check the poles and fittings.",
+            "Restore the supply and confirm the clearance above the road.",
+        ],
+        equipment=["Barricades and warning tape", "Insulated tools and tester", "Aerial lift"],
     ),
     IssueType(
         id="water_leak",
@@ -142,6 +198,14 @@ ISSUE_TYPES: List[IssueType] = [
         max_area=0.80,
         hazard=1,
         lookalikes=["a decorative fountain"],
+        verb="Repair",
+        steps=[
+            "Shut the nearest valve to stop the flow.",
+            "Excavate to expose the damaged section of pipe.",
+            "Repair or replace the section and test the joint under pressure.",
+            "Backfill, compact, and reinstate the road surface.",
+        ],
+        equipment=["Valve key", "Excavator or digging tools", "Pipe section and couplings", "Pump for the trench"],
     ),
     IssueType(
         id="waterlogging",
@@ -157,6 +221,14 @@ ISSUE_TYPES: List[IssueType] = [
         max_area=0.90,
         hazard=1,
         lookalikes=["a river", "a lake", "a wet road after rain"],
+        verb="Drain",
+        steps=[
+            "Put up warning signs, and close the lane if the water is deep.",
+            "Pump out the standing water.",
+            "De-silt the nearest drain and clear its inlet gratings.",
+            "Check the outfall for a blockage, so the water has somewhere to go.",
+        ],
+        equipment=["Water pump and hoses", "De-silting or suction vehicle", "Warning signs"],
     ),
     IssueType(
         id="open_manhole",
@@ -173,6 +245,14 @@ ISSUE_TYPES: List[IssueType] = [
         hazard=2,
         lookalikes=["a manhole cover", "a closed manhole cover", "a pothole in the road", "a storm drain grate"],
         box_required=True,
+        verb="Cover",
+        steps=[
+            "Barricade the opening at once and mark it so that it shows at night.",
+            "Check the frame and the chamber for damage.",
+            "Fit a replacement cover of the correct load class.",
+            "Confirm the cover sits flush and does not rock.",
+        ],
+        equipment=["Barricades and reflective tape", "Replacement cover and frame", "Lifting keys"],
     ),
     IssueType(
         id="garbage",
@@ -187,6 +267,14 @@ ISSUE_TYPES: List[IssueType] = [
         examples=["Rubbish has been piling up on the corner and nobody collects it.", "The area smells because of rotting refuse on the roadside."],
         max_area=0.90,
         hazard=0,
+        verb="Clear",
+        steps=[
+            "Clear the waste and take it to the transfer station.",
+            "Disinfect the spot.",
+            "Find out why it built up: a missed collection, no bin, or dumping.",
+            "Adjust the collection schedule or place a bin, so that it does not return.",
+        ],
+        equipment=["Collection truck", "Shovels and bags", "Disinfectant"],
     ),
     IssueType(
         id="damaged_sign",
@@ -202,6 +290,13 @@ ISSUE_TYPES: List[IssueType] = [
         max_area=0.60,
         hazard=1,
         lookalikes=["an intact traffic sign standing upright", "a guard rail"],
+        verb="Replace",
+        steps=[
+            "Make the sign safe if it is leaning or lying in the road.",
+            "Replace or re-erect it on a sound post and footing.",
+            "Confirm it faces approaching traffic and is not hidden by trees or poles.",
+        ],
+        equipment=["Replacement sign and post", "Post driver or concrete", "Cones and signs"],
     ),
 ]
 
@@ -217,6 +312,11 @@ OTHER = IssueType(
     locate_prompts=[],
     keywords=[],
     hazard=0,
+    verb="Inspect",
+    steps=[
+        "Send a ward inspector to assess the site.",
+        "Classify the problem and pass it to the department that handles it.",
+    ],
 )
 
 # What a picture with nothing wrong looks like. An issue is only reported when the
@@ -258,6 +358,35 @@ def severity_from_area(issue: IssueType, area_fraction: float) -> int:
     return max(1, min(5, size + issue.hazard - 1))
 
 
+# How soon a report should be acted on, lowest to highest. These windows are this system's own
+# defaults, not an official standard: a municipality would put its own service levels here.
+PRIORITIES = [
+    ("low", "Low", "Handle with routine maintenance"),
+    ("medium", "Medium", "Act within 7 days"),
+    ("high", "High", "Act within 3 days"),
+    ("urgent", "Urgent", "Act within 24 hours"),
+]
+
+
+def priority_for(severity: Optional[int], reports: int = 1, came_back: bool = False, repeat: bool = False) -> Dict[str, Any]:
+    """
+    Priority follows the severity, and goes up one level when the problem keeps being reported
+    (three reports or more) or when it has come back after a repair. The reasons are returned
+    with it, so the level can always be explained. `repeat` marks a report filed under an open
+    case: its count is its own place in the line ("report no. 4"), which stays true as more arrive.
+    """
+    rank = {5: 3, 4: 2, 3: 1}.get(severity or 0, 0)
+    reasons = [f"{SEVERITY_LABELS[severity]} severity"] if severity else []
+    if came_back:
+        reasons.append("Came back after an earlier repair")
+    if reports >= 2:
+        reasons.append(f"Report no. {reports} of this problem" if repeat else f"Reported {reports} times")
+    if came_back or reports >= 3:
+        rank = min(3, rank + 1)
+    level, label, respond = PRIORITIES[rank]
+    return {"level": level, "label": label, "respond": respond, "rank": rank + 1, "reasons": reasons}
+
+
 def severity_from_hazard(issue: IssueType) -> int:
     """Severity when the size is unknown (written reports, roughly located detections)."""
     return max(1, min(5, 2 + issue.hazard))
@@ -272,6 +401,8 @@ def as_documents() -> List[dict]:
             "department": t.department,
             "description": t.description,
             "default_action": t.default_action,
+            "procedure": t.steps,
+            "equipment": t.equipment,
             "detector_prompts": t.scene_prompts + t.locate_prompts,
             "text_keywords": t.keywords,
         }

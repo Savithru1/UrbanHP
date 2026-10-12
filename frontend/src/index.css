@@ -1,19 +1,571 @@
 @import "tailwindcss";
 
+/*
+  A light, quiet page: warm paper background, near-white surfaces, dark ink, one deep-blue accent.
+  Structure comes from spacing and hairlines; the only raised thing is the recommendation.
+*/
 @theme {
-  --color-ink: #0b0c0e;
-  --color-panel: #131518;
-  --color-line: #24272c;
-  --color-muted: #8b9098;
-  --color-detect: #ff6a3d;
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --color-bg: #f3f2ee;
+  --color-surface: #faf9f6;
+  --color-card: #fefdfb;
+  --color-raised: #ebe9e3;
+  --color-line: #e1dfd8;
+  --color-edge: #c9c6bd;
+  --color-ink: #1c1d1f;
+  --color-dim: #55565a;
+  --color-faint: #8a8b8e;
+  --color-accent: #24558a;
+  --color-good: #2a7a4b;
+  --color-warn: #8f610d;
+  --color-bad: #b23a30;
+  --font-sans: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* Overshoots a little before settling: for things that pop into place. */
+  --ease-pop: cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+html {
+  color-scheme: light;
+  scrollbar-color: #c9c6bd transparent;
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
 }
 
 body {
   font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgb(36 85 138 / 0.18);
+}
+
+h1, h2, h3 {
+  font-weight: 600;
+  letter-spacing: -0.016em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* ---- Building blocks ---------------------------------------------------- */
+
+@layer components {
+  .panel {
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+    background: var(--color-surface);
+    box-shadow: 0 1px 1px rgb(28 29 31 / 0.03), 0 10px 30px -22px rgb(28 29 31 / 0.18);
+  }
+
+  /* The one raised surface on a page: what the reader should look at first. */
+  .card {
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+    background: var(--color-card);
+    box-shadow: 0 1px 2px rgb(28 29 31 / 0.05), 0 4px 10px -6px rgb(28 29 31 / 0.08), 0 22px 44px -26px rgb(28 29 31 / 0.24);
+  }
+
+  /* A small heading over a group of things. */
+  .label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-dim);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 1px solid var(--color-edge);
+    background: var(--color-card);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-ink);
+    white-space: nowrap;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s, box-shadow 0.2s, transform 0.2s var(--ease-out);
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--color-raised);
+    border-color: #b3afa5;
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.975);
+    transition-duration: 0.06s;
+  }
+  /* An arrow inside a button leans the way it points when the button is hovered. */
+  .btn .nudge {
+    transition: transform 0.25s var(--ease-out);
+  }
+  .btn:hover:not(:disabled) .nudge {
+    transform: translateX(3px);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    border-color: var(--color-ink);
+    background: var(--color-ink);
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(28 29 31 / 0.25);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #2e3034;
+    border-color: #2e3034;
+    transform: translateY(-1px);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 10px 22px -10px rgb(28 29 31 / 0.55);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(0) scale(0.975);
+  }
+
+  /* No frame until hovered: for secondary actions inside a row. */
+  .btn-quiet {
+    border-color: transparent;
+    background: transparent;
+    color: var(--color-dim);
+  }
+  .btn-quiet:hover:not(:disabled) {
+    color: var(--color-ink);
+    border-color: transparent;
+    background: rgb(28 29 31 / 0.06);
+  }
+
+  .btn-sm {
+    height: 32px;
+    padding: 0 11px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+
+  .btn-icon {
+    width: 32px;
+    padding: 0;
+  }
+
+  .btn:focus-visible, .field:focus-visible, .nav-link:focus-visible, .row-link:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--color-line);
+    background: var(--color-card);
+    padding: 10px 13px;
+    color: var(--color-ink);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field::placeholder {
+    color: var(--color-faint);
+  }
+  .field:hover {
+    border-color: var(--color-edge);
+  }
+  .field:focus {
+    outline: none;
+    border-color: rgb(36 85 138 / 0.65);
+    box-shadow: 0 0 0 3px rgb(36 85 138 / 0.12);
+  }
+
+  /* A word of status: a dot and a label, no box. */
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--color-dim);
+  }
+  .status::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+  }
+
+  /* Text tabs: the header's navigation and the sections of a report. The underline slides in. */
+  .nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-dim);
+    white-space: nowrap;
+    transition: color 0.15s;
+  }
+  .nav-link:hover {
+    color: var(--color-ink);
+  }
+  .nav-link[aria-selected='true'] {
+    color: var(--color-ink);
+  }
+  /* The underline of a row of tabs. It is placed under the chosen tab and slides there when the choice changes. */
+  .tab-ink {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--color-ink);
+    pointer-events: none;
+  }
+  .tab-ink.is-armed {
+    transition: transform 0.38s var(--ease-out), width 0.38s var(--ease-out), opacity 0.2s;
+  }
+
+  /* A row of tabs that may be wider than a phone: it scrolls sideways, without a scrollbar. */
+  .tab-row {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .tab-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* A clickable line in a list. */
+  .row-link {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 14px;
+    text-align: left;
+    border-radius: 8px;
+    transition: background-color 0.15s;
+  }
+  .row-link:hover {
+    background: rgb(28 29 31 / 0.04);
+  }
+  /* The arrow at the end of a row steps forward when the row is pointed at. */
+  .row-link .row-arrow {
+    flex: none;
+    color: var(--color-faint);
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity 0.2s, transform 0.25s var(--ease-out);
+  }
+  .row-link:hover .row-arrow, .row-link:focus-visible .row-arrow {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* A field's label darkens while the field is being typed in. */
+  .field-group .label {
+    transition: color 0.15s;
+  }
+  .field-group:focus-within .label {
+    color: var(--color-ink);
+  }
+
+  /* Four corner marks, like a camera's frame. `--frame` is their colour, `--reach` how far in from the edge they sit. */
+  .frame {
+    --frame: var(--color-edge);
+    --arm: 22px;
+    --line: 1.5px;
+    position: absolute;
+    inset: var(--reach, 22px);
+    pointer-events: none;
+    border-radius: 2px;
+    background:
+      linear-gradient(var(--frame) 0 0) top left / var(--arm) var(--line),
+      linear-gradient(var(--frame) 0 0) top left / var(--line) var(--arm),
+      linear-gradient(var(--frame) 0 0) top right / var(--arm) var(--line),
+      linear-gradient(var(--frame) 0 0) top right / var(--line) var(--arm),
+      linear-gradient(var(--frame) 0 0) bottom left / var(--arm) var(--line),
+      linear-gradient(var(--frame) 0 0) bottom left / var(--line) var(--arm),
+      linear-gradient(var(--frame) 0 0) bottom right / var(--arm) var(--line),
+      linear-gradient(var(--frame) 0 0) bottom right / var(--line) var(--arm);
+    background-repeat: no-repeat;
+    transition: inset 0.35s var(--ease-out), opacity 0.3s;
+  }
+}
+
+/* ---- Motion -------------------------------------------------------------- */
+
+.fade-in {
+  animation: fade-in 0.32s var(--ease-out) both;
+}
+
+/*
+  The steps of a plan: a number for each, joined by a rail that is drawn downwards as the steps arrive.
+  `--i` is the step's place in the list, which sets how long it waits its turn.
+*/
+.steps > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  column-gap: 14px;
+  animation: fade-in 0.4s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms + 80ms);
+}
+.steps > li:last-child > div {
+  padding-bottom: 0.875rem;
+}
+.step-no {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
   background: var(--color-ink);
-  color: #e6e8eb;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.steps > li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 13.5px;
+  top: 33px;
+  bottom: 5px;
+  width: 1px;
+  background: var(--color-edge);
+  transform-origin: top;
+  animation: rail 0.45s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms + 240ms);
+}
+
+@keyframes rail {
+  from { transform: scaleY(0); }
+  to { transform: none; }
+}
+
+/* How pressing something is, as four rising bars filled up to its level. */
+.priority-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 15px;
+}
+.priority-bars i {
+  width: 4px;
+  border-radius: 1.5px;
+  background: var(--color-line);
+}
+.priority-bars i:nth-child(1) { height: 40%; }
+.priority-bars i:nth-child(2) { height: 60%; }
+.priority-bars i:nth-child(3) { height: 80%; }
+.priority-bars i:nth-child(4) { height: 100%; }
+.priority-bars i.is-on {
+  transform-origin: bottom;
+  animation: bar-rise 0.4s var(--ease-pop) backwards;
+}
+
+@keyframes bar-rise {
+  from { transform: scaleY(0.2); opacity: 0.3; }
+  to { transform: none; opacity: 1; }
+}
+
+/* A whole screen arriving. Where the browser cross-fades screens itself (html.vt), it is left to do so. */
+.screen {
+  animation: fade-in 0.32s var(--ease-out) both;
+}
+.vt .screen {
+  animation: none;
+}
+
+/* Something chosen settling into place: the file preview, the receipt. */
+.settle {
+  animation: settle 0.42s var(--ease-out) both;
+}
+
+@keyframes settle {
+  from { opacity: 0; transform: scale(0.975); }
+  to { opacity: 1; transform: none; }
+}
+
+/* A placeholder for content that is on its way: a soft band of light crosses it. */
+.skeleton {
+  border-radius: 6px;
+  background: linear-gradient(100deg, var(--color-raised) 30%, #f4f2ed 50%, var(--color-raised) 70%) 0 0 / 220% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* The tick on the receipt draws itself: first the ring, then the mark. */
+.tick circle {
+  stroke-dasharray: 64;
+  stroke-dashoffset: 64;
+  animation: draw 0.5s var(--ease-out) 0.1s forwards;
+}
+.tick path {
+  stroke-dasharray: 14;
+  stroke-dashoffset: 14;
+  animation: draw 0.3s var(--ease-out) 0.5s forwards;
+}
+
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* A status that is live: its dot sends out a ring every couple of seconds. */
+.status.is-live::before {
+  animation: ring 2.2s ease-out infinite;
+}
+
+@keyframes ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 7px transparent; }
+}
+
+/* Rows of <details> open and close by growing, where the browser can animate to a content's own height. */
+@supports (interpolate-size: allow-keywords) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+  details::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition: block-size 0.3s var(--ease-out), content-visibility 0.3s allow-discrete;
+  }
+  details[open]::details-content {
+    block-size: auto;
+  }
+}
+
+/* The header gains a soft shadow once the page has been scrolled under it. */
+@supports (animation-timeline: scroll()) {
+  .site-header {
+    animation: header-lift linear both;
+    animation-timeline: scroll();
+    animation-range: 0 72px;
+  }
+}
+
+@keyframes header-lift {
+  to { box-shadow: 0 12px 30px -22px rgb(28 29 31 / 0.4); }
+}
+
+/* The mark beside the name: its ring opens a little when the name is pointed at. */
+.brand-ring {
+  transform-origin: 12px 12px;
+  transition: transform 0.4s var(--ease-pop);
+}
+.brand:hover .brand-ring {
+  transform: scale(1.14);
+}
+
+/*
+  Changing screens: the old one fades out as the new one rises in, and the report's photo —
+  the one thing both screens share — grows from where it was to where it will be.
+*/
+.site-header {
+  view-transition-name: site-header;
+}
+.viewer {
+  view-transition-name: report-media;
+}
+
+::view-transition-old(root) {
+  animation: vt-out 0.16s ease-in both;
+}
+::view-transition-new(root) {
+  animation: vt-in 0.34s var(--ease-out) 0.04s both;
+}
+::view-transition-group(report-media) {
+  animation-duration: 0.46s;
+  animation-timing-function: var(--ease-out);
+}
+::view-transition-old(report-media),
+::view-transition-new(report-media) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 14px;
+}
+
+@keyframes vt-out {
+  to { opacity: 0; transform: translateY(-4px); }
+}
+@keyframes vt-in {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+/* Arrives without moving: for lines added to a list that scrolls. */
+.appear {
+  animation: appear 0.35s ease-out both;
+}
+
+@keyframes appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* A line that has just arrived is tinted, and the tint drains away. */
+.flash {
+  animation: flash 2.4s ease-out both;
+}
+
+@keyframes flash {
+  from { background-color: rgb(36 85 138 / 0.14); }
+  to { background-color: transparent; }
+}
+
+/* Children arrive one after another: list rows, the steps of a recommendation. */
+.stagger > * {
+  animation: fade-in 0.36s var(--ease-out) both;
+}
+.stagger > :nth-child(2) { animation-delay: 45ms; }
+.stagger > :nth-child(3) { animation-delay: 90ms; }
+.stagger > :nth-child(4) { animation-delay: 135ms; }
+.stagger > :nth-child(5) { animation-delay: 180ms; }
+.stagger > :nth-child(6) { animation-delay: 225ms; }
+.stagger > :nth-child(n + 7) { animation-delay: 270ms; }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* A thin line with a segment travelling along it: work is in progress, with no promise of how long. */
+.progress {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--color-line);
+}
+.progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 38%;
+  border-radius: 2px;
+  background: var(--color-accent);
+  animation: travel 1.3s ease-in-out infinite;
+}
+
+@keyframes travel {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(265%); }
 }
 
 /* ---- Detection viewer -------------------------------------------------- */
@@ -23,14 +575,17 @@ body {
   display: inline-block;
   max-width: 100%;
   line-height: 0;
-  background: #000;
+  background: #1c1d1f;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--color-line), 0 16px 36px -22px rgb(28 29 31 / 0.35);
 }
 
 .viewer > img,
 .viewer > video {
   display: block;
   max-width: 100%;
-  max-height: 72vh;
+  max-height: 76vh;
 }
 
 /* Once the picture's proportions are known it fills the available width (small photos are scaled up). */
@@ -46,19 +601,48 @@ body {
   max-height: none;
 }
 
-.viewer-overlay {
+/*
+  The scanner. `--scan` is how far down the picture the light bar is; everything that
+  moves with it (the bar, the light it casts, what it has revealed) reads that one value.
+*/
+@property --scan {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 0%;
+}
+
+.scan {
   position: absolute;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
   line-height: 1.2;
   text-align: left;
-  font-family: var(--font-mono);
-  /* Lets the labels and HUD scale with the size of the picture (cqw units below). */
+  /* Lets the labels scale with the size of the picture (cqw units below). */
   container-type: inline-size;
 }
 
-.viewer-overlay svg {
+/* Looking: the bar passes over the picture again and again until there is something to show. */
+.scan.is-scan {
+  animation: sweep 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+/* Showing: one last pass, and what was found appears where the bar has been. */
+.scan.is-reveal {
+  animation: sweep-once 1.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) both;
+}
+
+@keyframes sweep {
+  from { --scan: -4%; }
+  to { --scan: 104%; }
+}
+
+@keyframes sweep-once {
+  from { --scan: -4%; }
+  to { --scan: 122%; }
+}
+
+.scan svg {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -66,82 +650,240 @@ body {
 }
 
 /* Line widths stay in screen pixels although the drawing is stretched over the picture. */
-.viewer-overlay svg * {
+.scan svg * {
   vector-effect: non-scaling-stroke;
 }
 
-/* A detection label: a solid tab in the box colour sitting on the box's top-left corner. */
-.det-label {
-  position: absolute;
-  transform: translateY(-100%);
-  padding: 0.15em 0.45em;
-  white-space: nowrap;
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: clamp(11px, 2.3cqw, 20px);
-  font-weight: 500;
+.marks, .mark-labels {
+  transition: opacity 0.2s;
 }
 
-/* At the top edge there is no room above the box: put the label inside it. */
-.det-label.is-inside {
-  transform: none;
+/* The original picture, with nothing drawn on it. */
+.scan.is-bare .marks,
+.scan.is-bare .mark-labels {
+  opacity: 0;
 }
 
-.det-severity {
-  margin-left: 0.6em;
-  padding-left: 0.6em;
-  border-left: 1px solid rgb(255 255 255 / 0.55);
-  font-size: 0.85em;
+/* During the last pass, outlines and labels exist only above the bar. */
+.scan.is-reveal .marks,
+.scan.is-reveal .mark-labels {
+  clip-path: inset(0 0 calc(100% - var(--scan)) 0);
 }
 
-.hud {
-  position: absolute;
-  font-size: clamp(8px, 1.35cqw, 13px);
-  top: 2.2%;
-  left: 1.6%;
-  padding: 0.9em 1.1em;
-  background: rgb(11 12 14 / 0.66);
-  border: 1px solid rgb(255 255 255 / 0.14);
-  backdrop-filter: blur(3px);
-  color: #c9cdd3;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+/* The same outlines in white, visible only in the band the bar has just crossed: the highlight travels with the scan. */
+.marks-lit {
+  -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--scan) - 16%), #000 calc(var(--scan) - 1.5%), #000 var(--scan), transparent var(--scan));
+  mask-image: linear-gradient(to bottom, transparent calc(var(--scan) - 16%), #000 calc(var(--scan) - 1.5%), #000 var(--scan), transparent var(--scan));
 }
 
-.hud-title {
-  color: var(--color-detect);
-  margin-bottom: 0.8em;
-}
-
-.hud dl {
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 0.35em 1.2em;
-}
-
-.hud dt {
-  color: #8b9098;
-}
-
-.hud .accent {
-  color: var(--color-detect);
-}
-
-/* Sweep shown while a still image is being analysed. */
-.scanline {
+.scan-bar {
   position: absolute;
   left: 0;
   right: 0;
-  height: 22%;
-  background: linear-gradient(to bottom, transparent, rgb(255 106 61 / 0.22) 85%, rgb(255 106 61 / 0.9));
-  animation: scan 1.6s linear infinite;
+  top: var(--scan);
+  height: 2px;
+  background: rgb(255 255 255 / 0.96);
+  box-shadow: 0 0 8px 1px rgb(214 232 250 / 0.75), 0 0 28px 6px rgb(190 215 240 / 0.3);
 }
 
-@keyframes scan {
-  from { top: -22%; }
-  to { top: 100%; }
+/* The light the bar leaves behind: the picture itself is lifted for a moment where it has just been read. */
+.scan-light {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--scan) - 20%);
+  height: 20%;
+  background: linear-gradient(to bottom, rgb(214 232 250 / 0), rgb(214 232 250 / 0.14));
+  backdrop-filter: brightness(1.16) contrast(1.04);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000);
+  mask-image: linear-gradient(to bottom, transparent, #000);
+}
+
+/* Corner marks on the picture while it is being read; they ease away when the result is in. */
+.scan .frame {
+  --frame: rgb(255 255 255 / 0.9);
+  --reach: 3.2%;
+  --arm: clamp(14px, 3.4cqw, 30px);
+  --line: 2px;
+  opacity: 0;
+  filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.45));
+}
+.scan.is-scan .frame,
+.scan.is-reveal .frame {
+  opacity: 1;
+}
+.scan.is-scan .frame {
+  animation: frame-breathe 2.2s ease-in-out infinite;
+}
+
+@keyframes frame-breathe {
+  0%, 100% { inset: 3.2%; }
+  50% { inset: 2.2%; }
+}
+
+.mark-labels {
+  position: absolute;
+  inset: 0;
+}
+
+/* A detection's name, sitting on the top-left corner of its box. */
+.mark-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  transform: translateY(calc(-100% - 5px));
+  padding: 0.22em 0.6em;
+  border-radius: 7px;
+  background: rgb(254 253 251 / 0.94);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.28);
+  white-space: nowrap;
+  color: #1c1d1f;
+  font-size: clamp(11.5px, 1.6cqw, 15px);
+  font-weight: 600;
+}
+
+/* At the top edge there is no room above the box: put the label inside it. */
+.mark-label.is-inside {
+  transform: translateY(5px);
+  margin-left: 5px;
+}
+.mark-label.is-inside.is-flipped {
+  margin-left: 0;
+  margin-right: 5px;
+}
+
+.mark-label i {
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+}
+
+.mark-label small {
+  font-size: 0.92em;
+  font-weight: 500;
+  color: #6b6c6f;
+}
+
+.viewer-note {
+  position: absolute;
+  left: 50%;
+  bottom: 4.5%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: rgb(254 253 251 / 0.94);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.28);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #1c1d1f;
+}
+
+/* A dot that breathes while the scanner is working. */
+.viewer-note::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: breathe 1.2s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* ---- Map ---------------------------------------------------------------- */
+
+.leaflet-container {
+  background: #e9e7e1;
+  font-family: var(--font-sans);
+  border-radius: inherit;
+  outline: none;
+}
+
+/* OpenStreetMap's tiles, toned down so the pins are what stands out. */
+.leaflet-tile-pane {
+  filter: grayscale(0.55) contrast(0.94) brightness(1.03);
+}
+
+.leaflet-control-attribution {
+  background: rgb(254 253 251 / 0.8) !important;
+  color: #8a8b8e !important;
+  font-size: 10px;
+  border-top-left-radius: 6px;
+}
+.leaflet-control-attribution a {
+  color: #55565a !important;
+}
+
+.leaflet-bar {
+  border: 1px solid var(--color-edge) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 2px 8px -4px rgb(28 29 31 / 0.3) !important;
+}
+.leaflet-bar a {
+  background: #fefdfb !important;
+  color: #1c1d1f !important;
+  border-bottom-color: var(--color-line) !important;
+}
+.leaflet-bar a:hover {
+  background: #ebe9e3 !important;
+}
+
+.leaflet-tooltip {
+  background: #1c1d1f;
+  color: #fff;
+  border: 0;
+  border-radius: 7px;
+  box-shadow: none;
+  font-size: 13px;
+  padding: 4px 9px;
+}
+.leaflet-tooltip::before {
+  display: none;
+}
+
+/* A report on the map: a dot in its severity colour. */
+.map-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--pin, #24558a);
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+  transition: transform 0.18s var(--ease-out), box-shadow 0.18s;
+}
+.map-dot.is-active {
+  transform: scale(1.35);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45), 0 0 0 7px color-mix(in srgb, var(--pin, #24558a) 28%, transparent);
+}
+/* A pin that has just been added drops into place. */
+.map-dot.is-new {
+  animation: pin-in 0.45s var(--ease-pop) backwards;
+}
+
+@keyframes pin-in {
+  from { opacity: 0; transform: scale(0.2); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scanline { animation: none; top: 0; height: 100%; opacity: 0.3; }
+  html { scroll-behavior: auto; }
+  .steps > li, .steps > li::after, .priority-bars i.is-on,
+  .fade-in, .screen, .settle, .appear, .flash, .stagger > *, .scan.is-scan, .scan.is-reveal, .progress::after, .viewer-note::before,
+  .skeleton, .status.is-live::before, .map-dot.is-new, .site-header, .scan .frame { animation: none; }
+  .tick circle, .tick path { animation: none; stroke-dashoffset: 0; }
+  .scan-bar, .scan-light, .marks-lit, .scan .frame { display: none; }
+  .scan.is-reveal .marks, .scan.is-reveal .mark-labels { clip-path: none; }
+  .tab-ink.is-armed, .btn, .btn .nudge, .row-link .row-arrow, .frame, .brand-ring { transition: none; }
+  details::details-content { transition: none; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; }
 }

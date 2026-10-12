@@ -1,17 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
+import { Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { colorOf } from '../colors';
-import type { BBox, Detection, IncidentDetail, LiveFrame, Outline, OverlayBox } from '../types';
+import { calm } from '../motion';
+import type { BBox, DrawnDetection, LiveFrame, Outline, OverlayBox, Scannable } from '../types';
 
 interface Props {
-  detail: IncidentDetail;
+  detail: Scannable;
   live: LiveFrame | null;
   activeId: string | null;
+  /** One quiet line about the file and how it was analysed. */
+  caption?: string;
 }
 
-/** The uploaded image or video with every detection outlined, boxed and labelled on top of it. */
-export function Viewer({ detail, live, activeId }: Props) {
-  const { incident, media, detections } = detail;
+/**
+ * How the scanner is behaving:
+ *   scan    a light bar sweeps the picture again and again while the models are looking
+ *   reveal  one last pass: what was found is painted in where the bar has been
+ *   idle    the finished result, still
+ */
+type Phase = 'scan' | 'reveal' | 'idle';
+
+/** The uploaded image or video with every detection outlined on top of it. Mount it with `key={incident._id}`. */
+export function Viewer({ detail, live, activeId, caption }: Props) {
+  const { incident, media } = detail;
+  // A detection a person rejected is no longer drawn.
+  const detections = detail.detections.filter((d) => d.status !== 'rejected');
   const done = incident.status === 'completed';
+  const analysing = incident.status === 'received' || incident.status === 'analyzing';
+  const isImage = media?.kind === 'image';
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoTime, setVideoTime] = useState(0);
   // The URL of a video this browser failed to play (e.g. an unsupported codec).
@@ -19,6 +36,23 @@ export function Viewer({ detail, live, activeId }: Props) {
   const videoBroken = !!media && brokenUrl === media.url;
   // Width / height of the picture, so it can be scaled up to fill the space without distorting the overlay.
   const [measured, setMeasured] = useState<{ url: string; ratio: number } | null>(null);
+  // Show the upload as it came in, with nothing drawn on it.
+  const [bare, setBare] = useState(false);
+
+  // A picture that is already analysed is still revealed by one pass of the bar when it is opened.
+  const [stage, setStage] = useState<Phase>(() => (calm() ? 'idle' : analysing ? 'scan' : isImage && done ? 'reveal' : 'idle'));
+  const liveFrame = !done && live?.incident_id === incident._id ? live : null;
+  // For a picture, the result exists as soon as the detector has answered; the bar finishes its pass first.
+  const resultReady = done || (isImage && liveFrame !== null);
+  // A video has no last pass (its outlines follow the footage), and a failed analysis has nothing to show.
+  const phase: Phase = stage === 'scan' && (incident.status === 'failed' || (done && !isImage)) ? 'idle' : stage;
+
+  // Should the pass never report its end (a hidden tab pauses animations), do not wait for it forever.
+  useEffect(() => {
+    if (phase !== 'scan' || !isImage || !resultReady) return;
+    const timer = setTimeout(() => setStage((s) => (s === 'scan' ? 'reveal' : s)), 2600);
+    return () => clearTimeout(timer);
+  }, [phase, isImage, resultReady]);
 
   // Follow the playing video so the outlines stay on their targets.
   const playingVideo = media?.kind === 'video' && done && !videoBroken;
@@ -37,22 +71,37 @@ export function Viewer({ detail, live, activeId }: Props) {
   if (!media) return null;
 
   const measure = (w: number, h: number) => {
-    if (w > 0 && h > 0) setMeasured({ url: media.url, ratio: w / h });
+    if (w > 0 && h > 0) setMeasured((m) => (m?.url === media.url && Math.abs(m.ratio - w / h) < 0.001 ? m : { url: media.url, ratio: w / h }));
   };
 
-  const liveFrame = !done && live?.incident_id === incident._id ? live : null;
-  const step = incident.analysis?.sample_interval_s ?? 0.5;
+  /** A picture is scanned and revealed again; a video starts over from its first frame. */
+  const replay = () => {
+    setBare(false);
+    if (isImage) {
+      if (!calm()) setStage('scan');
+    } else if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      void videoRef.current.play().catch(() => {});
+    }
+  };
 
+  const step = incident.analysis?.sample_interval_s ?? 0.5;
   let boxes: OverlayBox[];
   let element: React.ReactNode;
 
-  if (media.kind === 'image') {
-    boxes = done ? detections.filter((d) => d.bbox).map(toOverlay) : (liveFrame?.boxes ?? []);
+  if (isImage) {
+    // Nothing is drawn while the bar is still looking: the result arrives with its last pass.
+    boxes = phase === 'scan' ? [] : done ? detections.filter((d) => d.bbox).map(toOverlay) : (liveFrame?.boxes ?? []);
     element = <img src={media.url} alt={media.file_name} onLoad={(e) => measure(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)} />;
   } else if (!done) {
     // Analysis in progress: show each frame as the detector finishes it.
     boxes = liveFrame?.boxes ?? [];
-    element = liveFrame?.image ? <img src={liveFrame.image} alt="Frame being analysed" /> : <video src={media.url} muted playsInline preload="metadata" />;
+    // Measured like the finished video, so the picture keeps one size from the first frame to the result.
+    element = liveFrame?.image ? (
+      <img src={liveFrame.image} alt="Frame being analysed" onLoad={(e) => measure(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)} />
+    ) : (
+      <video src={media.url} muted playsInline preload="metadata" onLoadedMetadata={(e) => measure(e.currentTarget.videoWidth, e.currentTarget.videoHeight)} />
+    );
   } else if (videoBroken && media.poster_url) {
     // The browser cannot play this format: fall back to the busiest frame.
     boxes = boxesAt(detections, media.poster_time_s ?? 0, step);
@@ -69,92 +118,110 @@ export function Viewer({ detail, live, activeId }: Props) {
   }
 
   const ratio = media.width && media.height ? media.width / media.height : measured?.url === media.url ? measured.ratio : null;
+  const shapes = (lit: boolean) =>
+    boxes.map((b) => {
+      const color = lit ? '#ffffff' : colorOf(b.issue_type);
+      const active = !lit && b.id === activeId;
+      return (
+        <g key={b.id}>
+          {b.mask && (
+            <polygon
+              points={b.mask.map(([x, y]) => `${x * 100},${y * 100}`).join(' ')}
+              fill={color}
+              fillOpacity={lit ? 0.4 : active ? 0.42 : 0.22}
+              stroke={color}
+              strokeWidth={active ? 3 : 2}
+              strokeLinejoin="round"
+            />
+          )}
+          {/* With an outline the box is a thin frame around it; without one it is all there is. */}
+          {(!lit || !b.mask) && (
+            <rect
+              x={b.bbox.x * 100} y={b.bbox.y * 100} width={b.bbox.w * 100} height={b.bbox.h * 100}
+              fill={b.mask ? 'none' : color}
+              fillOpacity={b.mask ? 0 : lit ? 0.3 : 0.14}
+              stroke={color}
+              strokeOpacity={b.mask ? 0.8 : 1}
+              strokeWidth={active ? 2.5 : b.mask ? 1.25 : 2}
+              strokeDasharray={b.approximate_location ? '7 5' : undefined}
+            />
+          )}
+        </g>
+      );
+    });
 
-  const analysing = incident.status === 'received' || incident.status === 'analyzing';
-  const when = new Date(incident.created_at);
-  const status = incident.status === 'completed' ? 'Complete' : incident.status === 'failed' ? 'Failed' : 'Analyzing';
+  const note = analysing ? (media.kind === 'video' && liveFrame ? `Scanning frame ${liveFrame.index} of ${liveFrame.total}` : 'Scanning') : null;
+  const canReplay = done && phase === 'idle' && !videoBroken && !(isImage && calm());
 
   return (
-    <div
-      className={`viewer${ratio ? ' is-sized' : ''}`}
-      style={ratio ? { aspectRatio: String(ratio), width: `min(100%, calc(72vh * ${ratio}))` } : undefined}
-    >
-      {element}
-      <div className="viewer-overlay">
-        {analysing && media.kind === 'image' && <div className="scanline" />}
+    // The picture and the line under it share one width, so the controls sit under the picture's own edges.
+    <div className={ratio ? 'mx-auto' : 'inline-block max-w-full'} style={ratio ? { width: `min(100%, calc(76vh * ${ratio}))` } : undefined}>
+      <div className={`viewer${ratio ? ' is-sized' : ''}`} style={ratio ? { aspectRatio: String(ratio) } : undefined}>
+        {element}
+        <div
+          className={`scan is-${phase}${bare ? ' is-bare' : ''}`}
+          onAnimationIteration={(e) => {
+            // The bar has reached the bottom: if the result is in, its next pass is the one that shows it.
+            if (e.animationName === 'sweep' && isImage && resultReady) setStage('reveal');
+          }}
+          onAnimationEnd={(e) => {
+            if (e.animationName === 'sweep-once') setStage('idle');
+          }}
+        >
+          {/* Outlines: drawn in a 0-100 coordinate space stretched over the picture. */}
+          <svg className="marks" viewBox="0 0 100 100" preserveAspectRatio="none">
+            {shapes(false)}
+          </svg>
+          {phase !== 'idle' && (
+            <svg className="marks-lit" viewBox="0 0 100 100" preserveAspectRatio="none">
+              {shapes(true)}
+            </svg>
+          )}
 
-        {/* Outlines and boxes: drawn in a 0-100 coordinate space stretched over the picture. */}
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-          {boxes.map((b) => {
-            const color = colorOf(b.issue_type);
-            const active = b.id === activeId;
-            return (
-              <g key={b.id}>
-                {b.mask && (
-                  <polygon
-                    points={b.mask.map(([x, y]) => `${x * 100},${y * 100}`).join(' ')}
-                    fill={color.fill}
-                    fillOpacity={active ? 0.75 : 0.55}
-                    stroke={color.fill}
-                    strokeWidth={1}
-                  />
-                )}
-                <rect
-                  x={b.bbox.x * 100}
-                  y={b.bbox.y * 100}
-                  width={b.bbox.w * 100}
-                  height={b.bbox.h * 100}
-                  fill="none"
-                  stroke={color.box}
-                  strokeWidth={active ? 4 : 2.5}
-                  strokeDasharray={b.approximate_location ? '8 6' : undefined}
-                />
-              </g>
-            );
-          })}
-        </svg>
+          {/* Labels are plain HTML so the text is never stretched with the picture. */}
+          <div className="mark-labels">
+            {boxes.map((b) => {
+              // A box near the right edge has its label hung from its right corner, so the name is never cut off.
+              const flipped = b.bbox.x > 0.6;
+              const side = flipped ? { right: `${Math.max(0, 1 - b.bbox.x - b.bbox.w) * 100}%` } : { left: `${b.bbox.x * 100}%` };
+              return (
+                <span key={b.id} className={`mark-label${b.bbox.y < 0.08 ? ' is-inside' : ''}${flipped ? ' is-flipped' : ''}`} style={{ ...side, top: `${b.bbox.y * 100}%` }}>
+                  <i style={{ background: colorOf(b.issue_type) }} />
+                  {b.label}
+                  <small>{Math.round(b.confidence * 100)}%</small>
+                </span>
+              );
+            })}
+          </div>
 
-        {/* Labels are plain HTML so the text is never stretched with the picture. */}
-        {boxes.map((b) => (
-          <span
-            key={b.id}
-            className={`det-label${b.bbox.y < 0.06 ? ' is-inside' : ''}`}
-            style={{ left: `${b.bbox.x * 100}%`, top: `${b.bbox.y * 100}%`, background: colorOf(b.issue_type).box }}
-          >
-            {b.label.toLowerCase()} {b.confidence.toFixed(2)}
-            <span className="det-severity">severity {b.severity}</span>
-          </span>
-        ))}
-
-        <div className="hud">
-          <div className="hud-title">Road inspection • AI detection</div>
-          <dl>
-            <dt>Date:</dt>
-            <dd>{when.toLocaleDateString('en-CA')}</dd>
-            <dt>Time:</dt>
-            <dd>{when.toLocaleTimeString('en-GB')}</dd>
-            <dt>Source:</dt>
-            <dd>{media.kind}</dd>
-            {liveFrame && media.kind === 'video' && (
-              <>
-                <dt>Frame:</dt>
-                <dd>
-                  {liveFrame.index} / {liveFrame.total}
-                </dd>
-              </>
-            )}
-            <dt>Detections:</dt>
-            <dd>{done ? detections.filter((d) => d.bbox).length : boxes.length}</dd>
-            <dt>Status:</dt>
-            <dd className="accent">{status}</dd>
-          </dl>
+          {phase !== 'idle' && (
+            <>
+              <div className="scan-light" />
+              <div className="scan-bar" />
+            </>
+          )}
+          <div className="frame" />
         </div>
+        {note && <div className="viewer-note">{note}</div>}
       </div>
+
+      {done && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2 text-left">
+          <button type="button" onClick={replay} disabled={!canReplay} className="btn btn-quiet btn-sm -ml-2" title={isImage ? 'Scan the picture again' : 'Play the video from the start'}>
+            <RotateCcw className="size-4" /> Replay
+          </button>
+          <button type="button" onClick={() => setBare((b) => !b)} className="btn btn-quiet btn-sm" title="Switch between the original upload and the outlined result" aria-pressed={bare}>
+            {bare ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+            {bare ? 'Show outlines' : 'Original'}
+          </button>
+          {caption && <p className="ml-auto min-w-0 truncate text-sm text-faint">{caption}</p>}
+        </div>
+      )}
     </div>
   );
 }
 
-function toOverlay(d: Detection): OverlayBox {
+function toOverlay(d: DrawnDetection): OverlayBox {
   return {
     id: d._id, issue_type: d.links.issue_type_id, label: d.label, severity: d.severity, confidence: d.confidence,
     bbox: d.bbox!, mask: d.mask, approximate_location: d.approximate_location,
@@ -168,7 +235,7 @@ function fitOutline(mask: Outline | null, from: BBox, to: BBox): Outline | null 
 }
 
 /** Where every tracked detection is at time `t` of the video, interpolated between analysed frames. */
-function boxesAt(detections: Detection[], t: number, step: number): OverlayBox[] {
+function boxesAt(detections: DrawnDetection[], t: number, step: number): OverlayBox[] {
   const out: OverlayBox[] = [];
   for (const d of detections) {
     const path = d.video?.path;

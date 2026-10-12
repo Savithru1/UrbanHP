@@ -85,7 +85,7 @@ async def update(
     if record:
         changes: Dict[str, Any] = {}
         for field, value in (set or {}).items():
-            old = _dig(before, field)
+            old = dig(before, field)
             if field not in _SKIP and old != value:
                 changes[field] = {"from": _brief(old), "to": _brief(value)}
         for field, value in (add or {}).items():
@@ -93,7 +93,7 @@ async def update(
         for field, value in (pull or {}).items():
             changes[field] = {"removed": _brief(value)}
         for field, value in (inc or {}).items():
-            old = _dig(before, field) or 0
+            old = dig(before, field) or 0
             changes[field] = {"from": old, "to": old + value}
         changes["version"] = {"from": before.get("version", 1), "to": before.get("version", 1) + 1}
         await log("updated", collection, document_id, summary, changes, incident_id)
@@ -107,7 +107,7 @@ async def delete(collection: str, document_id: str, *, summary: str, incident_id
     return bool(result.deleted_count)
 
 
-def _dig(doc: Dict[str, Any], dotted: str) -> Any:
+def dig(doc: Dict[str, Any], dotted: str) -> Any:
     value: Any = doc
     for part in dotted.split("."):
         value = value.get(part) if isinstance(value, dict) else None

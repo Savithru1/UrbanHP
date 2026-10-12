@@ -23,7 +23,7 @@ async def seed_initial_data():
     def memory(_id, days, issue, title, place, lesson, action, outcome, risk, protocol, learned_from):
         at = now - timedelta(days=days)
         return {
-            "_id": _id, "title": title, "location_tag": place,
+            "_id": _id, "title": title, "status": "validated", "location_tag": place, "geo": None,
             "lesson_learned": lesson, "historical_action_taken": action, "recorded_outcome": outcome,
             "recurrence_risk": risk, "recommended_protocol": protocol, "times_used": 0,
             "links": {
@@ -100,8 +100,10 @@ async def seed_initial_data():
             "_id": _id, "input_type": "text", "status": "completed", "version": 1,
             "title": text.split(".")[0], "summary": text, "citizen_text": text,
             "location": place, "location_key": location_key(place),
+            "geo": None, "location_source": "typed", "location_accuracy_m": None,
             "severity": severity, "severity_label": label, "departments": [], "detection_count": 0,
-            "is_recurring": False, "recommendation": None, "progress": None, "analysis": None,
+            "is_recurring": False, "work_status": "recurred", "recommendation": None, "feedback": None,
+            "progress": None, "analysis": None,
             "links": {
                 "media_id": None, "detection_ids": [], "issue_type_ids": [issue], "memory_ids": [memory_id],
                 "related_incident_ids": [], "duplicate_of": None, "action_ids": [],

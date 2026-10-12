@@ -1,18 +1,31 @@
-/** How each kind of issue is drawn: the box colour and the fill of its outline. */
-const COLORS: Record<string, { box: string; fill: string }> = {
-  pothole: { box: '#ff3b30', fill: '#e83fe0' },
-  road_crack: { box: '#ff9500', fill: '#ffcc00' },
-  road_obstruction: { box: '#ff6b00', fill: '#ff8a3d' },
-  fallen_tree: { box: '#30d158', fill: '#30d158' },
-  broken_streetlight: { box: '#ffd60a', fill: '#ffd60a' },
-  fallen_wire: { box: '#bf5af2', fill: '#bf5af2' },
-  water_leak: { box: '#0a84ff', fill: '#0a84ff' },
-  waterlogging: { box: '#64d2ff', fill: '#64d2ff' },
-  open_manhole: { box: '#ff375f', fill: '#ff375f' },
-  garbage: { box: '#c69c6d', fill: '#c69c6d' },
-  damaged_sign: { box: '#5e5ce6', fill: '#5e5ce6' },
+/** The colour each kind of issue is outlined in: clear on a photo, and readable as a dot on the light page. */
+const COLORS: Record<string, string> = {
+  pothole: '#f0624d',
+  road_crack: '#e2a416',
+  road_obstruction: '#e8853a',
+  fallen_tree: '#3fa565',
+  broken_streetlight: '#d4b106',
+  fallen_wire: '#9068dc',
+  water_leak: '#3a86df',
+  waterlogging: '#26a3b8',
+  open_manhole: '#df5a90',
+  garbage: '#a8855a',
+  damaged_sign: '#6468d8',
 };
 
-export function colorOf(issueType: string) {
-  return COLORS[issueType] ?? { box: '#ff3b30', fill: '#ff3b30' };
-}
+export const colorOf = (issueType: string) => COLORS[issueType] ?? '#3a86df';
+
+/** The issue types by name, for choosing one by hand (mirrors backend/app/taxonomy.py). */
+export const ISSUE_LABELS: Record<string, string> = {
+  pothole: 'Pothole',
+  road_crack: 'Road crack',
+  road_obstruction: 'Road obstruction',
+  fallen_tree: 'Fallen tree',
+  broken_streetlight: 'Broken street light',
+  fallen_wire: 'Fallen / hanging wire',
+  water_leak: 'Water leak',
+  waterlogging: 'Waterlogging',
+  open_manhole: 'Open manhole',
+  garbage: 'Garbage dump',
+  damaged_sign: 'Damaged sign',
+};

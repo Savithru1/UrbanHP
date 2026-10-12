@@ -32,7 +32,7 @@ GUIDE = [
     {
         "_id": "incidents", "order": 1,
         "one_document_is": "One report submitted through the app: a photo, a video or a written complaint.",
-        "read_first": ["title", "status", "severity", "location", "recommendation"],
+        "read_first": ["title", "status", "severity", "location", "geo", "registration", "work_status", "recommendation"],
         "links": {
             "links.media_id": "media_assets._id — the uploaded file",
             "links.detection_ids": "detections._id — everything found in this report",
@@ -46,7 +46,7 @@ GUIDE = [
     {
         "_id": "detections", "order": 2,
         "one_document_is": "One irregularity found in a report: an outlined object in a photo or video, or a problem named in the text.",
-        "read_first": ["label", "severity", "confidence", "bbox", "mask"],
+        "read_first": ["label", "severity", "confidence", "status", "bbox", "mask"],
         "links": {
             "links.incident_id": "incidents._id — the report it was found in",
             "links.media_id": "media_assets._id — the file it was found in",
@@ -75,7 +75,7 @@ GUIDE = [
     {
         "_id": "memories", "order": 5,
         "one_document_is": "A lesson the city learned from a past repair, reused when the same problem returns.",
-        "read_first": ["title", "lesson_learned", "recommended_protocol", "times_used"],
+        "read_first": ["title", "status", "lesson_learned", "recommended_protocol", "times_used"],
         "links": {
             "links.issue_type_id": "issue_types._id — the kind of problem the lesson is about",
             "links.learned_from_incident_ids": "incidents._id — the reports the lesson came from",
@@ -168,6 +168,11 @@ VALIDATORS = {
             "title": {"bsonType": ["string", "null"], "description": "One-line summary of what was found"},
             "location": {"bsonType": ["string", "null"]},
             "location_key": {"bsonType": ["string", "null"], "description": "Normalised location, used to match the same place"},
+            "geo": {"bsonType": ["object", "null"], "description": "Where the problem is: a GeoJSON Point, coordinates = [longitude, latitude]"},
+            "location_source": {"enum": ["gps", "pin", "photo", "typed", "text", None], "description": "How the location was obtained"},
+            "work_status": {"enum": ["open", "in_progress", "resolved", "recurred"], "description": "Follows the actions and outcomes recorded for it"},
+            "registration": {"bsonType": ["object", "null"], "description": "What the report is: new, already_registered (filed under the open case in case_id) or recurrence"},
+            "report_count": {"bsonType": ["int", "null"], "description": "On a case: how many times the problem has been reported"},
             "severity": {"bsonType": ["int", "null"], "minimum": 1, "maximum": 5},
             "links": LINKS["incidents"],
             "created_at": {"bsonType": "date"},
@@ -183,6 +188,7 @@ VALIDATORS = {
             "severity": {"bsonType": "int", "minimum": 1, "maximum": 5},
             "confidence": {"bsonType": "double", "minimum": 0, "maximum": 1},
             "source": {"enum": ["image", "video", "text"]},
+            "status": {"enum": ["open", "confirmed", "rejected"], "description": "Set by a person checking the detection; rejected ones no longer count"},
             "bbox": {
                 "bsonType": ["object", "null"], "required": ["x", "y", "w", "h"],
                 "description": "Box as fractions (0-1) of the frame; x, y = top-left corner",
@@ -219,6 +225,8 @@ VALIDATORS = {
         "required": ["_id", "title", "lesson_learned", "recommended_protocol", "links"],
         "properties": {
             "_id": {"bsonType": "string"},
+            "status": {"enum": ["draft", "validated", "retired"], "description": "Only validated lessons shape recommendations"},
+            "geo": {"bsonType": ["object", "null"], "description": "Where the lesson was learned (GeoJSON Point), when known"},
             "links": {"bsonType": "object", "required": ["issue_type_id", "learned_from_incident_ids", "used_by_incident_ids"]},
         },
     },
@@ -254,6 +262,7 @@ INDEXES = {
         [("links.issue_type_ids", 1), ("created_at", -1)],
         [("status", 1)],
         [("location_key", 1)],
+        [("geo", "2dsphere")],
     ],
     "detections": [
         [("links.incident_id", 1)],
@@ -286,6 +295,7 @@ OVERVIEW_PIPELINE = [
     {"$lookup": {"from": "memories", "localField": "links.memory_ids", "foreignField": "_id", "as": "memories"}},
     {"$lookup": {"from": "incidents", "localField": "links.related_incident_ids", "foreignField": "_id", "as": "related_incidents"}},
     {"$lookup": {"from": "actions", "localField": "_id", "foreignField": "links.incident_id", "as": "actions"}},
+    {"$lookup": {"from": "outcomes", "localField": "_id", "foreignField": "links.incident_id", "as": "outcomes"}},
     {"$lookup": {
         "from": "activity_log", "localField": "_id", "foreignField": "links.incident_id", "as": "updates",
         "pipeline": [{"$sort": {"at": 1}}, {"$project": {"_id": 0, "at": 1, "summary": 1, "collection": 1, "document_id": 1}}],
@@ -349,6 +359,11 @@ async def init_schema():
     for name, specs in INDEXES.items():
         for keys in specs:
             await db[name].create_index(keys)
+    # One text index per collection: it is what the report search runs its keyword match on.
+    await db.incidents.create_index(
+        [("title", "text"), ("location", "text"), ("citizen_text", "text")],
+        name="report_text", weights={"title": 3, "location": 3, "citizen_text": 2}, default_language="english",
+    )
 
     for doc in GUIDE:
         await db.about.replace_one({"_id": doc["_id"]}, doc, upsert=True)
@@ -356,6 +371,7 @@ async def init_schema():
         await db.drop_collection("_guide")
 
     await _sync_issue_types(db)
+    await _backfill_new_fields(db)
 
     try:
         if OVERVIEW_VIEW in existing:
@@ -383,6 +399,29 @@ async def _sync_issue_types(db):
             }},
             upsert=True,
         )
+
+
+async def work_status_of(db, incident_id: str) -> str:
+    """Where an incident stands, judged by the actions and outcomes recorded for it."""
+    action_ids = [a["_id"] async for a in db.actions.find({"links.incident_id": incident_id}, {"_id": 1})]
+    if not action_ids:
+        return "open"
+    latest = await db.outcomes.find_one({"links.action_id": {"$in": action_ids}}, sort=[("created_at", -1)])
+    if latest is None:
+        return "in_progress"
+    return "recurred" if latest.get("recurrence_detected") else "resolved"
+
+
+async def _backfill_new_fields(db):
+    """Gives documents written before these fields existed their values. Safe to re-run."""
+    await db.memories.update_many({"status": {"$exists": False}}, {"$set": {"status": "validated"}})
+    await db.memories.update_many({"geo": {"$exists": False}}, {"$set": {"geo": None}})
+    await db.incidents.update_many({"geo": {"$exists": False}}, {"$set": {"geo": None, "location_accuracy_m": None, "feedback": None}})
+    await db.incidents.update_many({"registration": {"$exists": False}}, {"$set": {"registration": None, "report_count": 1}})
+    await db.incidents.update_many({"location_source": {"$exists": False}, "location": None}, {"$set": {"location_source": None}})
+    await db.incidents.update_many({"location_source": {"$exists": False}}, {"$set": {"location_source": "typed"}})
+    async for i in db.incidents.find({"work_status": {"$exists": False}}, {"_id": 1}):
+        await db.incidents.update_one({"_id": i["_id"]}, {"$set": {"work_status": await work_status_of(db, i["_id"])}})
 
 
 # --------------------------------------------------------------------------- #
@@ -560,7 +599,7 @@ async def rebuild_links():
         last = await db.incidents.find_one({"links.issue_type_ids": t["_id"]}, {"created_at": 1}, sort=[("created_at", -1)])
         await db.issue_types.update_one({"_id": t["_id"]}, {"$set": {
             "stats.incidents": await db.incidents.count_documents({"links.issue_type_ids": t["_id"]}),
-            "stats.detections": await db.detections.count_documents({"links.issue_type_id": t["_id"]}),
+            "stats.detections": await db.detections.count_documents({"links.issue_type_id": t["_id"], "status": {"$ne": "rejected"}}),
             "stats.last_detected_at": last["created_at"] if last else None,
             "links.memory_ids": memories_by_type.get(t["_id"], []),
             "links.last_incident_id": last["_id"] if last else None,

@@ -11,7 +11,8 @@ start "UrbanHP Frontend [Vite - Port 5173]" cmd /k "cd frontend && npm run dev"
 
 echo.
 echo Both servers started.
-echo   App:      http://127.0.0.1:5173/
+echo   Public page:  http://127.0.0.1:5173/
+echo   Admin page:   http://127.0.0.1:5173/admin/
 echo   Compass:  mongodb://127.0.0.1:27017  (database: urbanhp)
 echo.
 echo The backend needs about 30 seconds to load the detection models.
